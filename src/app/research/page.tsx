@@ -392,111 +392,276 @@ function TeamMemberCard({ member }: { member: TeamMember }) {
   )
 }
 
+type HunterPersonRaw = {
+  firstName?: string
+  lastName?: string
+  position?: string
+  department?: string
+  seniority?: string
+  linkedin?: string
+  twitter?: string
+  totalResults?: number
+}
+
+type HunterEnrichmentRaw = {
+  name?: string
+  description?: string
+  foundedYear?: number
+  location?: string
+  logo?: string
+  tags?: string[]
+  tech?: string[]
+  techCategories?: string[]
+  metrics?: { employees?: string; trafficRank?: string; estimatedAnnualRevenue?: string; raised?: number }
+  social?: { linkedin?: string; twitter?: string; facebook?: string; instagram?: string; crunchbase?: string }
+  fundingRounds?: Array<{ date?: string; series?: string; amount?: number; currency?: string; investors?: string[] }>
+  companyType?: string
+  phone?: string
+}
+
 function TeamPanel({ data }: { data: CompanyResearchSweepResult }) {
   const teamResult = data.results.find((r) => r.name === "company_website.team")
-  const hunterResult = data.results.find((r) => r.name === "hunter.domain_search")
+  const hunterPeopleResult = data.results.find((r) => r.name === "hunter.domain_search")
+  const hunterEnrichResult = data.results.find((r) => r.name === "hunter.company_enrichment")
 
   const teamData = teamResult?.ok ? (teamResult.data as CompanyTeamPageResult) : null
-  const hunterData = hunterResult?.ok
-    ? (hunterResult.data as { emails?: Array<{ firstName?: string; lastName?: string; position?: string; linkedin?: string }> })
+  const hunterPeopleData = hunterPeopleResult?.ok
+    ? (hunterPeopleResult.data as { people?: HunterPersonRaw[]; totalResults?: number })
     : null
+  const enrichData = hunterEnrichResult?.ok ? (hunterEnrichResult.data as HunterEnrichmentRaw) : null
 
-  // Build people list from Hunter (name + role only, no emails)
-  const hunterPeople: TeamMember[] = (hunterData?.emails ?? [])
-    .filter((e) => e.firstName || e.lastName)
-    .map((e) => ({
-      name: [e.firstName, e.lastName].filter(Boolean).join(" "),
-      role: e.position,
-      linkedIn: e.linkedin,
+  const hunterPeople: TeamMember[] = (hunterPeopleData?.people ?? [])
+    .filter((p) => p.firstName || p.lastName)
+    .map((p) => ({
+      name: [p.firstName, p.lastName].filter(Boolean).join(" "),
+      role: p.position,
+      linkedIn: p.linkedin,
+      twitter: p.twitter,
     }))
 
   const websiteMembers = teamData?.members ?? []
   const hasWebsiteData = websiteMembers.length > 0
   const hasHunterPeople = hunterPeople.length > 0
-
-  if (!teamResult && !hunterResult) {
-    return (
-      <Card className="border-border/60">
-        <CardContent className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-3">
-          <Users className="size-10 text-muted-foreground/30" />
-          <p className="text-sm">No domain was found to scrape team data from.</p>
-        </CardContent>
-      </Card>
-    )
-  }
+  const hasEnrichment = !!enrichData
 
   return (
-    <div className="space-y-6">
-      {/* Website team members */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Users className="size-4 text-primary" />
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            From Company Website
-          </h3>
-          {teamData && (
-            <span className="ml-auto text-xs text-muted-foreground">
-              {teamData.pageUrl}
-            </span>
+    <div className="space-y-8">
+      {/* ── Company Intel from Hunter Enrichment ─────────────────────── */}
+      {hasEnrichment && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Building2 className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Company Intelligence</h3>
+            <span className="ml-auto text-xs text-muted-foreground">via Hunter.io Enrichment</span>
+          </div>
+
+          {/* Header card */}
+          <Card className="border-border/60">
+            <CardContent className="p-5 flex gap-4 items-start">
+              {enrichData!.logo && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={enrichData!.logo} alt={enrichData!.name} className="size-12 rounded-lg object-contain border border-border/40 bg-white p-1 shrink-0" />
+              )}
+              <div className="space-y-1 min-w-0">
+                <p className="font-semibold text-base">{enrichData!.name ?? data.companyName}</p>
+                {enrichData!.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">{enrichData!.description}</p>
+                )}
+                <div className="flex flex-wrap gap-3 pt-1 text-xs text-muted-foreground">
+                  {enrichData!.foundedYear && <span>Founded {enrichData!.foundedYear}</span>}
+                  {enrichData!.location && <span>{enrichData!.location}</span>}
+                  {enrichData!.companyType && <span className="capitalize">{enrichData!.companyType}</span>}
+                  {enrichData!.metrics?.employees && <span>{enrichData!.metrics.employees} employees</span>}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tags / industry */}
+          {(enrichData!.tags?.length ?? 0) > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tags</p>
+              <div className="flex flex-wrap gap-2">
+                {enrichData!.tags!.map((t) => (
+                  <span key={t} className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs">{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Technologies */}
+          {(enrichData!.tech?.length ?? 0) > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Technologies</p>
+              <div className="flex flex-wrap gap-2">
+                {enrichData!.tech!.map((t) => (
+                  <span key={t} className="rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700 px-3 py-1 text-xs font-medium">{t}</span>
+                ))}
+              </div>
+              {(enrichData!.techCategories?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {enrichData!.techCategories!.map((c) => (
+                    <span key={c} className="rounded-md border border-border/40 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">{c}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Metrics */}
+          {enrichData!.metrics && Object.keys(enrichData!.metrics).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Metrics</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {enrichData!.metrics.employees && (
+                  <div className="rounded-xl border border-border/60 bg-card p-3 text-center">
+                    <p className="text-lg font-semibold">{enrichData!.metrics.employees}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Employees</p>
+                  </div>
+                )}
+                {enrichData!.metrics.trafficRank && (
+                  <div className="rounded-xl border border-border/60 bg-card p-3 text-center">
+                    <p className="text-lg font-semibold capitalize">{enrichData!.metrics.trafficRank.replace(/_/g, " ")}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Traffic</p>
+                  </div>
+                )}
+                {enrichData!.metrics.estimatedAnnualRevenue && (
+                  <div className="rounded-xl border border-border/60 bg-card p-3 text-center">
+                    <p className="text-lg font-semibold">{enrichData!.metrics.estimatedAnnualRevenue}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Est. Revenue</p>
+                  </div>
+                )}
+                {enrichData!.metrics.raised != null && (
+                  <div className="rounded-xl border border-border/60 bg-card p-3 text-center">
+                    <p className="text-lg font-semibold">${(enrichData!.metrics.raised / 1e6).toFixed(1)}M</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Raised</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Funding rounds */}
+          {(enrichData!.fundingRounds?.length ?? 0) > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Funding Rounds</p>
+              <div className="space-y-2">
+                {enrichData!.fundingRounds!.map((r, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 text-sm">
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary uppercase">{r.series ?? "—"}</span>
+                    {r.amount != null && <span className="font-medium">${(r.amount / 1e6).toFixed(1)}M</span>}
+                    {r.date && <span className="text-muted-foreground text-xs ml-auto">{r.date}</span>}
+                    {(r.investors?.length ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground truncate">{r.investors!.join(", ")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Social links */}
+          {enrichData!.social && Object.values(enrichData!.social).some(Boolean) && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Social</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(enrichData!.social).map(([platform, url]) =>
+                  url ? (
+                    <a
+                      key={platform}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs hover:border-primary/40 hover:text-primary transition-colors capitalize"
+                    >
+                      {platform}
+                    </a>
+                  ) : null
+                )}
+              </div>
+            </div>
           )}
         </div>
+      )}
 
-        {!teamResult && (
-          <p className="text-sm text-muted-foreground italic">Domain not detected — try searching with a URL.</p>
-        )}
-        {teamResult && !teamResult.ok && (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-            {teamResult.error}
-          </div>
-        )}
-        {teamData && !hasWebsiteData && (
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
-            <p>{teamData.note ?? "No structured person data was found on the team/about page."}</p>
-            <p className="mt-1 text-xs">
-              Most React/Next.js SPAs render team sections client-side, so static scraping cannot extract them.
-              Try the AI Summary — it can infer team members from news and search snippets.
-            </p>
-          </div>
-        )}
-        {hasWebsiteData && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {websiteMembers.map((m, i) => (
-              <TeamMemberCard key={i} member={m} />
-            ))}
-          </div>
-        )}
-      </div>
+      {hasEnrichment && <Separator className="opacity-40" />}
 
-      {/* Hunter people (names + roles, no emails) */}
-      {hasHunterPeople && (
-        <>
-          <Separator className="opacity-50" />
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Users className="size-4 text-primary" />
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                From Hunter.io (People Index)
-              </h3>
+      {/* ── Team Members ─────────────────────────────────────────────── */}
+      {/* Hunter people index */}
+      {(hasHunterPeople || hunterPeopleResult) && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Users className="size-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              People Index
+            </h3>
+            {hunterPeopleData?.totalResults != null && (
+              <span className="text-xs text-muted-foreground ml-auto">
+                {hunterPeopleData.totalResults} total known · showing {hunterPeople.length}
+              </span>
+            )}
+          </div>
+          {hunterPeopleResult && !hunterPeopleResult.ok && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {hunterPeopleResult.error}
             </div>
+          )}
+          {hasHunterPeople ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {hunterPeople.map((m, i) => (
                 <TeamMemberCard key={i} member={m} />
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No named people with positions found in Hunter&apos;s index for this domain.</p>
+          )}
+        </div>
+      )}
+
+      {/* Website scraper */}
+      {teamResult && (
+        <>
+          <Separator className="opacity-40" />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-primary" />
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                From Company Website
+              </h3>
+              {teamData?.pageUrl && (
+                <span className="ml-auto text-xs text-muted-foreground truncate max-w-[200px]">{teamData.pageUrl}</span>
+              )}
+            </div>
+            {teamResult && !teamResult.ok && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                {teamResult.error}
+              </div>
+            )}
+            {teamData && !hasWebsiteData && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+                <p>{teamData.note ?? "No structured person data (JSON-LD / microdata) found on the team page."}</p>
+                <p className="mt-1 text-xs">Most modern SPAs render team sections via JavaScript — static scraping cannot access them.</p>
+              </div>
+            )}
+            {hasWebsiteData && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {websiteMembers.map((m, i) => (
+                  <TeamMemberCard key={i} member={m} />
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
 
-      {!hasWebsiteData && !hasHunterPeople && teamResult?.ok && (
+      {/* Nothing at all */}
+      {!hasEnrichment && !hasHunterPeople && !hasWebsiteData && (
         <Card className="border-border/60">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground space-y-3">
+          <CardContent className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-3">
             <Users className="size-10 text-muted-foreground/30" />
             <div className="text-center">
-              <p className="font-medium text-foreground">No team members found</p>
-              <p className="text-sm mt-1 max-w-xs">
-                The website may render team pages with JavaScript. Try &ldquo;Generate AI Summary&rdquo;
-                which can infer people from search snippets and news.
-              </p>
+              <p className="font-medium text-foreground">No team or company data found</p>
+              <p className="text-sm mt-1 max-w-xs">Try searching with a URL (e.g. wealthup.me) so a domain is detected.</p>
             </div>
           </CardContent>
         </Card>

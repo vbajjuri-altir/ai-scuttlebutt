@@ -9,6 +9,7 @@ import {
 import {
   getConfiguredApiSources,
   getGitHubOrgProfile,
+  getHunterCompanyEnrichment,
   searchGitHub,
   searchHunterDomain,
   searchNewsApi,
@@ -127,9 +128,13 @@ export async function runCompanyResearchSweep(
           collapse: "digest",
         }),
       ),
-      // Company profile & social links via Hunter (limit emails to preserve credits)
+      // People index: named people with positions (no emails returned)
       captureToolResult("hunter.domain_search", () =>
-        searchHunterDomain({ domain, limit: 3 }),
+        searchHunterDomain({ domain, limit: 10 }),
+      ),
+      // Company enrichment: technologies, tech categories, funding, metrics, social
+      captureToolResult("hunter.company_enrichment", () =>
+        getHunterCompanyEnrichment(domain),
       ),
       // Scrape the company website's team/about page for actual team members
       captureToolResult("company_website.team", () =>

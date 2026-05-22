@@ -342,43 +342,27 @@ export async function searchNewsData(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Hunter.io – Domain Search (people index)
+// ---------------------------------------------------------------------------
+
 export type HunterDomainSearchOptions = {
   domain: string
+  /** Max people to return (default 10, free plan max 10). */
   limit?: number
   department?: string
   seniority?: string
 }
 
-export type HunterEmail = {
-  value?: string
-  type?: string
-  confidence?: number
+export type HunterPerson = {
   firstName?: string
   lastName?: string
   position?: string
   department?: string
   seniority?: string
   linkedin?: string
-}
-
-export type HunterCompanyProfile = {
-  description?: string
-  industry?: string
-  companyType?: string
-  headcount?: string
-  country?: string
-  state?: string
-  city?: string
-  street?: string
-  postalCode?: string
   twitter?: string
-  linkedin?: string
-  facebook?: string
-  instagram?: string
-  youtube?: string
-  technologies?: string[]
-  webmail?: boolean
-  acceptAll?: boolean
+  phoneNumber?: string
 }
 
 export type HunterDomainSearchResult = {
@@ -387,11 +371,16 @@ export type HunterDomainSearchResult = {
   requestUrl: string
   domain?: string
   organization?: string
-  pattern?: string
-  companyProfile: HunterCompanyProfile
-  emails: HunterEmail[]
+  totalResults?: number
+  people: HunterPerson[]
 }
 
+/**
+ * Fetch people associated with a domain from Hunter's domain-search endpoint.
+ * We filter for `required_field=full_name,position` to only return actual team
+ * members (not generic email addresses without identity), and we omit email
+ * values entirely since the caller doesn't need them.
+ */
 export async function searchHunterDomain(
   options: HunterDomainSearchOptions,
   fetchOptions: FetchJsonOptions = {},
@@ -399,12 +388,15 @@ export async function searchHunterDomain(
   const apiKey = fetchOptions.apiKey ?? getEnvValue(["HUNTER_API_KEY"], "Hunter.io")
   const url = new URL("https://api.hunter.io/v2/domain-search")
   url.searchParams.set("domain", options.domain)
-  url.searchParams.set("limit", String(options.limit ?? 5))
+  url.searchParams.set("limit", String(options.limit ?? 10))
+  // Only return people who have both a full name and a job position
+  url.searchParams.set("required_field", "full_name,position")
+  // Personal emails only (not role-based like info@, support@)
+  url.searchParams.set("type", "personal")
 
   if (options.department) {
     url.searchParams.set("department", options.department)
   }
-
   if (options.seniority) {
     url.searchParams.set("seniority", options.seniority)
   }
@@ -414,48 +406,173 @@ export async function searchHunterDomain(
     headers: { "X-API-KEY": apiKey },
   })
   const data = (payload.data as JsonObject | undefined) ?? {}
+  const meta = (payload.meta as JsonObject | undefined) ?? {}
 
   return {
     source: "hunter_domain_search",
     query: options,
     requestUrl: url.toString(),
     domain: typeof data.domain === "string" ? data.domain : undefined,
-    organization:
-      typeof data.organization === "string" ? data.organization : undefined,
-    pattern: typeof data.pattern === "string" ? data.pattern : undefined,
-    companyProfile: {
-      description: typeof data.description === "string" ? data.description : undefined,
-      industry: typeof data.industry === "string" ? data.industry : undefined,
-      companyType: typeof data.company_type === "string" ? data.company_type : undefined,
-      headcount: typeof data.headcount === "string" ? data.headcount : undefined,
-      country: typeof data.country === "string" ? data.country : undefined,
-      state: typeof data.state === "string" ? data.state : undefined,
-      city: typeof data.city === "string" ? data.city : undefined,
-      street: typeof data.street === "string" ? data.street : undefined,
-      postalCode: typeof data.postal_code === "string" ? data.postal_code : undefined,
-      twitter: typeof data.twitter === "string" ? data.twitter : undefined,
-      linkedin: typeof data.linkedin === "string" ? data.linkedin : undefined,
-      facebook: typeof data.facebook === "string" ? data.facebook : undefined,
-      instagram: typeof data.instagram === "string" ? data.instagram : undefined,
-      youtube: typeof data.youtube === "string" ? data.youtube : undefined,
-      technologies: Array.isArray(data.technologies)
-        ? (data.technologies as unknown[]).filter((t): t is string => typeof t === "string")
-        : undefined,
-      webmail: typeof data.webmail === "boolean" ? data.webmail : undefined,
-      acceptAll: typeof data.accept_all === "boolean" ? data.accept_all : undefined,
-    },
-    emails: asArray(data.emails).slice(0, options.limit ?? 5).map((email) => ({
-      value: typeof email.value === "string" ? email.value : undefined,
-      type: typeof email.type === "string" ? email.type : undefined,
-      confidence: typeof email.confidence === "number" ? email.confidence : undefined,
+    organization: typeof data.organization === "string" ? data.organization : undefined,
+    totalResults: typeof meta.results === "number" ? meta.results : undefined,
+    people: asArray(data.emails).map((email) => compactObject({
       firstName: typeof email.first_name === "string" ? email.first_name : undefined,
       lastName: typeof email.last_name === "string" ? email.last_name : undefined,
       position: typeof email.position === "string" ? email.position : undefined,
       department: typeof email.department === "string" ? email.department : undefined,
       seniority: typeof email.seniority === "string" ? email.seniority : undefined,
       linkedin: typeof email.linkedin === "string" ? email.linkedin : undefined,
-    })),
+      twitter: typeof email.twitter === "string" ? email.twitter : undefined,
+      phoneNumber: typeof email.phone_number === "string" ? email.phone_number : undefined,
+    })) as HunterPerson[],
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hunter.io – Company Enrichment (/v2/companies/find)
+// ---------------------------------------------------------------------------
+
+export type HunterFundingRound = {
+  date?: string
+  series?: string
+  amount?: number
+  currency?: string
+  investors?: string[]
+}
+
+export type HunterCompanyEnrichmentResult = {
+  source: "hunter_company_enrichment"
+  domain: string
+  requestUrl: string
+  name?: string
+  legalName?: string
+  description?: string
+  foundedYear?: number
+  location?: string
+  logo?: string
+  tags?: string[]
+  category?: {
+    sector?: string
+    industryGroup?: string
+    industry?: string
+    subIndustry?: string
+  }
+  metrics?: {
+    employees?: string
+    trafficRank?: string
+    estimatedAnnualRevenue?: string
+    raised?: number
+    marketCap?: number
+  }
+  tech?: string[]
+  techCategories?: string[]
+  social?: {
+    linkedin?: string
+    twitter?: string
+    facebook?: string
+    instagram?: string
+    crunchbase?: string
+  }
+  phone?: string
+  emailProvider?: string
+  companyType?: string
+  fundingRounds?: HunterFundingRound[]
+}
+
+/**
+ * Fetch rich company intelligence from Hunter's Company Enrichment endpoint.
+ * Returns technologies, tech categories, funding rounds, metrics, social links,
+ * industry classification, and more — completely separate from the emails index.
+ */
+export async function getHunterCompanyEnrichment(
+  domain: string,
+  fetchOptions: FetchJsonOptions = {},
+): Promise<HunterCompanyEnrichmentResult> {
+  const apiKey = fetchOptions.apiKey ?? getEnvValue(["HUNTER_API_KEY"], "Hunter.io")
+  const url = new URL("https://api.hunter.io/v2/companies/find")
+  url.searchParams.set("domain", domain)
+
+  const payload = await fetchJson<JsonObject>(url, {
+    ...fetchOptions,
+    headers: { "X-API-KEY": apiKey },
+  })
+  const d = (payload.data as JsonObject | undefined) ?? {}
+  const category = (d.category as JsonObject | undefined) ?? {}
+  const metrics = (d.metrics as JsonObject | undefined) ?? {}
+  const linkedin = (d.linkedin as JsonObject | undefined) ?? {}
+  const twitter = (d.twitter as JsonObject | undefined) ?? {}
+  const facebook = (d.facebook as JsonObject | undefined) ?? {}
+  const instagram = (d.instagram as JsonObject | undefined) ?? {}
+  const crunchbase = (d.crunchbase as JsonObject | undefined) ?? {}
+
+  const fundingRounds: HunterFundingRound[] = asArray(d.fundingRounds).map((r) => compactObject({
+    date: typeof r.date === "string" ? r.date : undefined,
+    series: typeof r.series === "string" ? r.series : undefined,
+    amount: typeof r.amount === "number" ? r.amount : undefined,
+    currency: typeof r.currency === "string" ? r.currency : undefined,
+    investors: Array.isArray(r.investors)
+      ? (r.investors as unknown[]).filter((i): i is string => typeof i === "string")
+      : undefined,
+  })) as HunterFundingRound[]
+
+  return compactObject({
+    source: "hunter_company_enrichment" as const,
+    domain,
+    requestUrl: url.toString(),
+    name: typeof d.name === "string" ? d.name : undefined,
+    legalName: typeof d.legalName === "string" ? d.legalName : undefined,
+    description: typeof d.description === "string" ? d.description : undefined,
+    foundedYear: typeof d.foundedYear === "number" ? d.foundedYear : undefined,
+    location: typeof d.location === "string" ? d.location : undefined,
+    logo: typeof d.logo === "string" ? d.logo : undefined,
+    tags: Array.isArray(d.tags)
+      ? (d.tags as unknown[]).filter((t): t is string => typeof t === "string")
+      : undefined,
+    category: compactObject({
+      sector: typeof category.sector === "string" ? category.sector : undefined,
+      industryGroup: typeof category.industryGroup === "string" ? category.industryGroup : undefined,
+      industry: typeof category.industry === "string" ? category.industry : undefined,
+      subIndustry: typeof category.subIndustry === "string" ? category.subIndustry : undefined,
+    }),
+    metrics: compactObject({
+      employees: typeof metrics.employees === "string" ? metrics.employees : undefined,
+      trafficRank: typeof metrics.trafficRank === "string" ? metrics.trafficRank : undefined,
+      estimatedAnnualRevenue:
+        typeof metrics.estimatedAnnualRevenue === "string"
+          ? metrics.estimatedAnnualRevenue
+          : undefined,
+      raised: typeof metrics.raised === "number" ? metrics.raised : undefined,
+      marketCap: typeof metrics.marketCap === "number" ? metrics.marketCap : undefined,
+    }),
+    tech: Array.isArray(d.tech)
+      ? (d.tech as unknown[]).filter((t): t is string => typeof t === "string")
+      : undefined,
+    techCategories: Array.isArray(d.techCategories)
+      ? (d.techCategories as unknown[]).filter((t): t is string => typeof t === "string")
+      : undefined,
+    social: compactObject({
+      linkedin:
+        typeof linkedin.handle === "string" ? `https://linkedin.com/${linkedin.handle}` : undefined,
+      twitter:
+        typeof twitter.handle === "string" ? `https://twitter.com/${twitter.handle}` : undefined,
+      facebook:
+        typeof facebook.handle === "string"
+          ? `https://facebook.com/${facebook.handle}`
+          : undefined,
+      instagram:
+        typeof instagram.handle === "string"
+          ? `https://instagram.com/${instagram.handle}`
+          : undefined,
+      crunchbase:
+        typeof crunchbase.handle === "string"
+          ? `https://crunchbase.com/${crunchbase.handle}`
+          : undefined,
+    }),
+    phone: typeof d.phone === "string" ? d.phone : undefined,
+    emailProvider: typeof d.emailProvider === "string" ? d.emailProvider : undefined,
+    companyType: typeof d.company_type === "string" ? d.company_type : undefined,
+    fundingRounds: fundingRounds.length > 0 ? fundingRounds : undefined,
+  }) as HunterCompanyEnrichmentResult
 }
 
 export type SerpApiSearchOptions = {
