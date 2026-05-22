@@ -15,7 +15,7 @@ import "@xyflow/react/dist/style.css"
 import type { KnowledgeGraphNode, KnowledgeGraphEdge } from "@/lib/ai-pipelines"
 
 // ---------------------------------------------------------------------------
-// Type → visual style map
+// Type → visual style map  (green-forward monochrome palette)
 // ---------------------------------------------------------------------------
 
 type TypeStyle = {
@@ -27,64 +27,64 @@ type TypeStyle = {
 
 const TYPE_STYLES: Record<string, TypeStyle> = {
   COMPANY: {
-    bg: "rgba(59,130,246,0.18)",
-    border: "rgb(59,130,246)",
-    text: "rgb(147,197,253)",
-    minimap: "rgb(59,130,246)",
+    bg: "rgba(75, 166, 105, 0.15)",
+    border: "rgb(75, 166, 105)",
+    text: "rgb(134, 239, 172)",
+    minimap: "rgb(75, 166, 105)",
   },
   PERSON: {
-    bg: "rgba(34,197,94,0.18)",
-    border: "rgb(34,197,94)",
-    text: "rgb(134,239,172)",
-    minimap: "rgb(34,197,94)",
+    bg: "rgba(52, 211, 153, 0.12)",
+    border: "rgb(52, 211, 153)",
+    text: "rgb(110, 231, 183)",
+    minimap: "rgb(52, 211, 153)",
   },
   PRODUCT: {
-    bg: "rgba(168,85,247,0.18)",
-    border: "rgb(168,85,247)",
-    text: "rgb(216,180,254)",
-    minimap: "rgb(168,85,247)",
+    bg: "rgba(20, 184, 166, 0.12)",
+    border: "rgb(20, 184, 166)",
+    text: "rgb(94, 234, 212)",
+    minimap: "rgb(20, 184, 166)",
   },
   INVESTOR: {
-    bg: "rgba(234,179,8,0.18)",
-    border: "rgb(234,179,8)",
-    text: "rgb(253,224,71)",
-    minimap: "rgb(234,179,8)",
+    bg: "rgba(250, 204, 21, 0.12)",
+    border: "rgb(250, 204, 21)",
+    text: "rgb(253, 224, 71)",
+    minimap: "rgb(250, 204, 21)",
   },
   CUSTOMER: {
-    bg: "rgba(249,115,22,0.18)",
-    border: "rgb(249,115,22)",
-    text: "rgb(253,186,116)",
-    minimap: "rgb(249,115,22)",
+    bg: "rgba(251, 146, 60, 0.12)",
+    border: "rgb(251, 146, 60)",
+    text: "rgb(253, 186, 116)",
+    minimap: "rgb(251, 146, 60)",
   },
   TECHNOLOGY: {
-    bg: "rgba(6,182,212,0.18)",
-    border: "rgb(6,182,212)",
-    text: "rgb(103,232,249)",
-    minimap: "rgb(6,182,212)",
+    bg: "rgba(56, 189, 248, 0.12)",
+    border: "rgb(56, 189, 248)",
+    text: "rgb(125, 211, 252)",
+    minimap: "rgb(56, 189, 248)",
   },
   INDUSTRY: {
-    bg: "rgba(236,72,153,0.18)",
-    border: "rgb(236,72,153)",
-    text: "rgb(249,168,212)",
-    minimap: "rgb(236,72,153)",
+    bg: "rgba(167, 139, 250, 0.12)",
+    border: "rgb(167, 139, 250)",
+    text: "rgb(196, 181, 253)",
+    minimap: "rgb(167, 139, 250)",
   },
   LOCATION: {
-    bg: "rgba(20,184,166,0.18)",
-    border: "rgb(20,184,166)",
-    text: "rgb(94,234,212)",
-    minimap: "rgb(20,184,166)",
+    bg: "rgba(132, 204, 22, 0.12)",
+    border: "rgb(132, 204, 22)",
+    text: "rgb(163, 230, 53)",
+    minimap: "rgb(132, 204, 22)",
   },
   EVENT: {
-    bg: "rgba(239,68,68,0.18)",
-    border: "rgb(239,68,68)",
-    text: "rgb(252,165,165)",
-    minimap: "rgb(239,68,68)",
+    bg: "rgba(248, 113, 113, 0.12)",
+    border: "rgb(248, 113, 113)",
+    text: "rgb(252, 165, 165)",
+    minimap: "rgb(248, 113, 113)",
   },
   UNKNOWN: {
-    bg: "rgba(113,113,122,0.18)",
-    border: "rgb(113,113,122)",
-    text: "rgb(161,161,170)",
-    minimap: "rgb(113,113,122)",
+    bg: "rgba(113, 113, 122, 0.12)",
+    border: "rgb(113, 113, 122)",
+    text: "rgb(212, 212, 216)",
+    minimap: "rgb(113, 113, 122)",
   },
 }
 
@@ -96,7 +96,6 @@ function styleForType(type: string): TypeStyle {
 // Radial layout
 // ---------------------------------------------------------------------------
 
-// Ring assignment per type: 0 = center, 1 = inner ring, etc.
 const TYPE_RING: Record<string, number> = {
   COMPANY: 0,
   PERSON: 1,
@@ -133,7 +132,6 @@ function radialLayout(nodes: KnowledgeGraphNode[]): Map<string, { x: number; y: 
 
     for (let i = 0; i < ring.length; i++) {
       if (radius === 0) {
-        // Spread multiple central nodes slightly so they don't overlap
         const spread = (ring.length - 1) * (NODE_WIDTH + 24) * 0.5
         positions.set(ring[i], {
           x: CX - spread + i * (NODE_WIDTH + 24),
@@ -191,16 +189,16 @@ function toFlowEdges(edges: KnowledgeGraphEdge[]): Edge[] {
     animated: edge.confidence >= 0.9,
     type: "smoothstep",
     style: {
-      stroke: edge.confidence >= 0.9 ? "rgb(99,102,241)" : "rgb(82,82,91)",
+      stroke: edge.confidence >= 0.9 ? "rgb(75, 166, 105)" : "rgb(82, 82, 91)",
       strokeWidth: 1.5,
     },
     labelStyle: {
       fontSize: 10,
       fontFamily: "monospace",
-      fill: "rgb(161,161,170)",
+      fill: "rgb(161, 161, 170)",
     },
     labelBgStyle: {
-      fill: "rgb(9,9,11)",
+      fill: "rgb(9, 9, 11)",
       fillOpacity: 0.85,
     },
     labelBgPadding: [4, 4] as [number, number],
@@ -222,7 +220,7 @@ export function GraphVisualization({ nodes, edges }: Props) {
   const flowEdges = useMemo(() => toFlowEdges(edges), [edges])
 
   return (
-    <div style={{ height: 520 }} className="rounded-xl border border-border overflow-hidden">
+    <div style={{ height: 520 }} className="rounded-xl border border-border/60 overflow-hidden bg-card/30">
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
@@ -237,26 +235,26 @@ export function GraphVisualization({ nodes, edges }: Props) {
           variant={BackgroundVariant.Dots}
           gap={24}
           size={1}
-          color="rgb(39,39,42)"
+          color="rgb(39, 39, 42)"
         />
         <Controls
           style={{
-            background: "rgb(24,24,27)",
-            border: "1px solid rgb(39,39,42)",
+            background: "rgb(24, 24, 27)",
+            border: "1px solid rgb(39, 39, 42)",
             borderRadius: "8px",
           }}
         />
         <MiniMap
           style={{
-            background: "rgb(18,18,20)",
-            border: "1px solid rgb(39,39,42)",
+            background: "rgb(18, 18, 20)",
+            border: "1px solid rgb(39, 39, 42)",
             borderRadius: "8px",
           }}
           nodeColor={(node) => {
             const s = styleForType((node.data as { type?: string }).type ?? "UNKNOWN")
             return s.minimap
           }}
-          maskColor="rgba(0,0,0,0.6)"
+          maskColor="rgba(0, 0, 0, 0.6)"
         />
       </ReactFlow>
     </div>

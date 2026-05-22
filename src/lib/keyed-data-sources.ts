@@ -829,9 +829,11 @@ export function buildProductHuntPostsQuery(): string {
 }
 
 export function buildProductHuntSearchQuery(): string {
+  // PH API v2 removed the `search` argument from `posts`.
+  // We fetch top-voted posts and rely on the caller to filter/label by company name.
   return `
-    query SearchProductHuntPosts($query: String!, $first: Int!) {
-      posts(first: $first, order: VOTES, search: $query) {
+    query SearchProductHuntPosts($first: Int!) {
+      posts(first: $first, order: VOTES) {
         edges {
           node {
             id
@@ -853,7 +855,7 @@ export function buildProductHuntSearchQuery(): string {
               username
               twitterUsername
               websiteUrl
-              profileUrl
+              profileImage
             }
             topics {
               edges {
@@ -884,9 +886,10 @@ export async function searchProductHuntPosts(
   options: ProductHuntSearchOptions,
   fetchOptions: FetchJsonOptions & { accessToken?: string } = {},
 ): Promise<ProductHuntGraphqlResult> {
+  // PH API v2 no longer supports search via `posts`; pass only `first`.
   return productHuntGraphql(
     buildProductHuntSearchQuery(),
-    { query: options.query, first: options.first ?? 5 },
+    { first: options.first ?? 5 },
     fetchOptions,
   )
 }
