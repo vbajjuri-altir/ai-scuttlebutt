@@ -1,6 +1,7 @@
 {
   "name": "ai-scuttlebutt",
   "version": "0.1.0",
+  "description": "AI-powered startup intelligence tool. Drop in a company name, get a full research report — financials, product intel, customer sentiment, MOAT analysis, and founder deep-dive. Know everything about any startup. In minutes, not days.",
   "private": true,
   "scripts": {
     "dev": "next dev",
