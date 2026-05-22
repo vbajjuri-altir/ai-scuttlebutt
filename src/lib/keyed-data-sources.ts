@@ -41,12 +41,6 @@ function getOptionalEnvValue(envNames: string[]): string | undefined {
   return undefined
 }
 
-function compactObject<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null),
-  ) as T
-}
-
 function redactedUrl(url: URL, paramsToRedact: string[] = []): string {
   const safeUrl = new URL(url)
 

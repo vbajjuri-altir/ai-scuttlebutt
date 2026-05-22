@@ -1,32 +1,27 @@
+import { runCompanyResearchSweep } from "@/lib/research-tools"
+
 export async function POST(request: Request) {
   try {
-    const { query } = await request.json()
+    const { query, domain, githubOrg, screenerSymbol } = await request.json()
 
     if (!query || typeof query !== "string") {
       return Response.json({ error: "Query is required" }, { status: 400 })
     }
 
-    const response = await fetch(
-      "https://api.altir.ai/v1/research",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.ALTIR_API_KEY}`,
-        },
-        body: JSON.stringify({ query: query.trim() }),
-      }
-    )
+    const data = await runCompanyResearchSweep({
+      companyName: query.trim(),
+      domain: typeof domain === "string" && domain.trim() ? domain.trim() : undefined,
+      githubOrg:
+        typeof githubOrg === "string" && githubOrg.trim()
+          ? githubOrg.trim()
+          : undefined,
+      screenerSymbol:
+        typeof screenerSymbol === "string" && screenerSymbol.trim()
+          ? screenerSymbol.trim()
+          : undefined,
+      includeProductHunt: true,
+    })
 
-    if (!response.ok) {
-      const text = await response.text()
-      return Response.json(
-        { error: `API error: ${response.status}`, detail: text },
-        { status: response.status }
-      )
-    }
-
-    const data = await response.json()
     return Response.json(data)
   } catch (err) {
     return Response.json(

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,11 +42,11 @@ export default function ResearchPage() {
       {/* Header */}
       <header className="border-b border-border">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 h-16">
-          <a href="/" className="font-semibold text-lg">AI Scuttlebutt</a>
+          <Link href="/" className="font-semibold text-lg">AI Scuttlebutt</Link>
           <nav className="flex items-center gap-3">
-            <a href="/">
+            <Link href="/">
               <Button variant="outline" size="sm">Home</Button>
-            </a>
+            </Link>
           </nav>
         </div>
       </header>
