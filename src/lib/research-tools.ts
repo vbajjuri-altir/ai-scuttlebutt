@@ -1,6 +1,7 @@
 import {
   createGooglePatentsSearch,
   createScreenerCompanyUrl,
+  fetchCompanyTeamPage,
   getLatestWaybackSnapshot,
   searchAppStoreApps,
   searchWaybackCaptures,
@@ -126,9 +127,13 @@ export async function runCompanyResearchSweep(
           collapse: "digest",
         }),
       ),
-      // Limit to 5 emails to preserve credits
+      // Company profile & social links via Hunter (limit emails to preserve credits)
       captureToolResult("hunter.domain_search", () =>
-        searchHunterDomain({ domain, limit: 5 }),
+        searchHunterDomain({ domain, limit: 3 }),
+      ),
+      // Scrape the company website's team/about page for actual team members
+      captureToolResult("company_website.team", () =>
+        fetchCompanyTeamPage(domain),
       ),
     )
   }

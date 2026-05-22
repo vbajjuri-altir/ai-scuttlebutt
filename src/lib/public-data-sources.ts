@@ -544,3 +544,181 @@ export function createMcaPortalAccess(options: McaCompanySearchOptions = {}): Mc
       "MCA does not provide a simple public no-token API for this workflow. Use the portal manually; do not bypass login, OTP, captcha, session checks, or other access controls.",
   }
 }
+
+// ---------------------------------------------------------------------------
+// Company team page scraper
+// ---------------------------------------------------------------------------
+
+export type TeamMember = {
+  name: string
+  role?: string
+  bio?: string
+  linkedIn?: string
+  twitter?: string
+  imageUrl?: string
+}
+
+export type CompanyTeamPageResult = {
+  source: "company_team_page"
+  domain: string
+  pageUrl: string
+  members: TeamMember[]
+  totalFound: number
+  note?: string
+}
+
+/** Candidate paths to try when looking for a team/about page */
+const TEAM_PAGE_PATHS = ["/team", "/about", "/about-us", "/company", "/our-team", "/people"]
+
+/**
+ * Extract Person records from JSON-LD <script> blocks embedded in the page.
+ * Many modern sites use schema.org/Person or schema.org/Organization with members.
+ */
+function extractJsonLdPersons(html: string): TeamMember[] {
+  const members: TeamMember[] = []
+  const scriptRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let match: RegExpExecArray | null
+
+  while ((match = scriptRegex.exec(html)) !== null) {
+    try {
+      const parsed: unknown = JSON.parse(match[1])
+      const entries = Array.isArray(parsed) ? parsed : [parsed]
+      for (const entry of entries) {
+        if (typeof entry !== "object" || entry === null) continue
+        const obj = entry as Record<string, unknown>
+
+        // Direct Person
+        if (obj["@type"] === "Person" && typeof obj.name === "string") {
+          members.push(compactObject({
+            name: obj.name,
+            role: typeof obj.jobTitle === "string" ? obj.jobTitle : undefined,
+            bio: typeof obj.description === "string" ? obj.description : undefined,
+            linkedIn:
+              typeof obj.sameAs === "string" && obj.sameAs.includes("linkedin")
+                ? obj.sameAs
+                : undefined,
+            imageUrl:
+              typeof obj.image === "string"
+                ? obj.image
+                : typeof (obj.image as Record<string, unknown>)?.url === "string"
+                  ? (obj.image as Record<string, unknown>).url as string
+                  : undefined,
+          }) as TeamMember)
+        }
+
+        // Organization.member / Organization.employee arrays
+        for (const key of ["member", "employee", "founder"]) {
+          const list = obj[key]
+          if (!Array.isArray(list)) continue
+          for (const item of list) {
+            if (typeof item !== "object" || item === null) continue
+            const person = item as Record<string, unknown>
+            if (typeof person.name === "string") {
+              members.push(compactObject({
+                name: person.name,
+                role: typeof person.jobTitle === "string" ? person.jobTitle : undefined,
+                bio: typeof person.description === "string" ? person.description : undefined,
+              }) as TeamMember)
+            }
+          }
+        }
+      }
+    } catch {
+      // Malformed JSON-LD — skip
+    }
+  }
+
+  return members
+}
+
+/**
+ * Heuristic HTML extraction: find elements that look like person cards.
+ * Looks for common patterns: itemprop="name" inside itemtype="Person",
+ * or role-like text immediately after a name-like heading.
+ */
+function extractHtmlPersons(html: string): TeamMember[] {
+  const members: TeamMember[] = []
+
+  // itemprop="name" + optional itemprop="jobTitle" in microdata Person blocks
+  const personBlockRe =
+    /itemtype=["'][^"']*Person["'][^>]*>([\s\S]*?)(?=itemtype=["']|<\/[a-z]+>\s*<\/[a-z]+>\s*<\/[a-z]+>|$)/gi
+  let blockMatch: RegExpExecArray | null
+  while ((blockMatch = personBlockRe.exec(html)) !== null) {
+    const block = blockMatch[1]
+    const nameMatch = block.match(/itemprop=["']name["'][^>]*>([^<]+)</)
+    const titleMatch = block.match(/itemprop=["']jobTitle["'][^>]*>([^<]+)</)
+    if (nameMatch) {
+      members.push(compactObject({
+        name: nameMatch[1].trim(),
+        role: titleMatch ? titleMatch[1].trim() : undefined,
+      }) as TeamMember)
+    }
+  }
+
+  return members
+}
+
+/**
+ * Fetch the company's website to find team members. Tries several common
+ * team/about page paths and extracts people from JSON-LD and microdata.
+ */
+export async function fetchCompanyTeamPage(
+  domain: string,
+  fetchOptions?: FetchJsonOptions,
+): Promise<CompanyTeamPageResult> {
+  const base = `https://${domain.replace(/^www\./, "www.")}`
+  let lastError: string | undefined
+
+  for (const path of TEAM_PAGE_PATHS) {
+    const pageUrl = `${base}${path}`
+    try {
+      const html = await fetchHtml(new URL(pageUrl), fetchOptions)
+      const fromJsonLd = extractJsonLdPersons(html)
+      const fromMicrodata = extractHtmlPersons(html)
+
+      // Deduplicate by name
+      const seen = new Set<string>()
+      const merged: TeamMember[] = []
+      for (const m of [...fromJsonLd, ...fromMicrodata]) {
+        const key = m.name.toLowerCase().trim()
+        if (!seen.has(key)) {
+          seen.add(key)
+          merged.push(m)
+        }
+      }
+
+      if (merged.length > 0) {
+        return {
+          source: "company_team_page",
+          domain,
+          pageUrl,
+          members: merged,
+          totalFound: merged.length,
+        }
+      }
+
+      // Page loaded but no structured data — return what meta we can with a note
+      return {
+        source: "company_team_page",
+        domain,
+        pageUrl,
+        members: [],
+        totalFound: 0,
+        note:
+          "Page loaded but no structured person data (JSON-LD/microdata) was found. " +
+          "The team section may be rendered client-side (JavaScript) or use non-standard markup.",
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  return {
+    source: "company_team_page",
+    domain,
+    pageUrl: `${base}/team`,
+    members: [],
+    totalFound: 0,
+    note: `Could not load any team page. Last error: ${lastError ?? "unknown"}`,
+  }
+}

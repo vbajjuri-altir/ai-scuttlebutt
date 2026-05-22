@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import type { SummaryPipelineResult, KnowledgeGraphPipelineResult } from "@/lib/ai-pipelines"
 import type { CompanyResearchSweepResult } from "@/lib/research-tools"
+import type { TeamMember, CompanyTeamPageResult } from "@/lib/public-data-sources"
 import { GraphVisualization } from "@/components/graph-visualization"
 import {
   Search,
@@ -336,10 +337,179 @@ function GraphPanel({ result }: { result: KnowledgeGraphPipelineResult }) {
 }
 
 // ---------------------------------------------------------------------------
+// Team panel
+// ---------------------------------------------------------------------------
+
+function TeamMemberCard({ member }: { member: TeamMember }) {
+  const initials = member.name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition-colors">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+        {member.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={member.imageUrl} alt={member.name} className="size-10 rounded-full object-cover" />
+        ) : (
+          initials
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-sm truncate">{member.name}</p>
+        {member.role && (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{member.role}</p>
+        )}
+        {member.bio && (
+          <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-2">{member.bio}</p>
+        )}
+        <div className="flex gap-3 mt-1.5">
+          {member.linkedIn && (
+            <a
+              href={member.linkedIn}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline"
+            >
+              LinkedIn
+            </a>
+          )}
+          {member.twitter && (
+            <a
+              href={`https://twitter.com/${member.twitter.replace(/^@/, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline"
+            >
+              Twitter
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TeamPanel({ data }: { data: CompanyResearchSweepResult }) {
+  const teamResult = data.results.find((r) => r.name === "company_website.team")
+  const hunterResult = data.results.find((r) => r.name === "hunter.domain_search")
+
+  const teamData = teamResult?.ok ? (teamResult.data as CompanyTeamPageResult) : null
+  const hunterData = hunterResult?.ok
+    ? (hunterResult.data as { emails?: Array<{ firstName?: string; lastName?: string; position?: string; linkedin?: string }> })
+    : null
+
+  // Build people list from Hunter (name + role only, no emails)
+  const hunterPeople: TeamMember[] = (hunterData?.emails ?? [])
+    .filter((e) => e.firstName || e.lastName)
+    .map((e) => ({
+      name: [e.firstName, e.lastName].filter(Boolean).join(" "),
+      role: e.position,
+      linkedIn: e.linkedin,
+    }))
+
+  const websiteMembers = teamData?.members ?? []
+  const hasWebsiteData = websiteMembers.length > 0
+  const hasHunterPeople = hunterPeople.length > 0
+
+  if (!teamResult && !hunterResult) {
+    return (
+      <Card className="border-border/60">
+        <CardContent className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-3">
+          <Users className="size-10 text-muted-foreground/30" />
+          <p className="text-sm">No domain was found to scrape team data from.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Website team members */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Users className="size-4 text-primary" />
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            From Company Website
+          </h3>
+          {teamData && (
+            <span className="ml-auto text-xs text-muted-foreground">
+              {teamData.pageUrl}
+            </span>
+          )}
+        </div>
+
+        {!teamResult && (
+          <p className="text-sm text-muted-foreground italic">Domain not detected — try searching with a URL.</p>
+        )}
+        {teamResult && !teamResult.ok && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            {teamResult.error}
+          </div>
+        )}
+        {teamData && !hasWebsiteData && (
+          <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+            <p>{teamData.note ?? "No structured person data was found on the team/about page."}</p>
+            <p className="mt-1 text-xs">
+              Most React/Next.js SPAs render team sections client-side, so static scraping cannot extract them.
+              Try the AI Summary — it can infer team members from news and search snippets.
+            </p>
+          </div>
+        )}
+        {hasWebsiteData && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {websiteMembers.map((m, i) => (
+              <TeamMemberCard key={i} member={m} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Hunter people (names + roles, no emails) */}
+      {hasHunterPeople && (
+        <>
+          <Separator className="opacity-50" />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-primary" />
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                From Hunter.io (People Index)
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {hunterPeople.map((m, i) => (
+                <TeamMemberCard key={i} member={m} />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {!hasWebsiteData && !hasHunterPeople && teamResult?.ok && (
+        <Card className="border-border/60">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground space-y-3">
+            <Users className="size-10 text-muted-foreground/30" />
+            <div className="text-center">
+              <p className="font-medium text-foreground">No team members found</p>
+              <p className="text-sm mt-1 max-w-xs">
+                The website may render team pages with JavaScript. Try &ldquo;Generate AI Summary&rdquo;
+                which can infer people from search snippets and news.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
-type Tab = "raw" | "summary" | "graph"
+type Tab = "raw" | "summary" | "graph" | "team"
 
 export default function ResearchPage() {
   const [query, setQuery] = useState("")
@@ -426,8 +596,15 @@ export default function ResearchPage() {
     }
   }
 
+  const teamResult = data?.results.find((r) => r.name === "company_website.team")
+  const teamCount =
+    teamResult?.ok && typeof (teamResult.data as { totalFound?: number }).totalFound === "number"
+      ? (teamResult.data as { totalFound: number }).totalFound
+      : undefined
+
   const tabs: { id: Tab; label: string; icon: React.ElementType; badge?: string }[] = [
     { id: "raw", label: "Raw Data", icon: FileText },
+    { id: "team", label: "Team", icon: Users, badge: teamCount != null ? `${teamCount}` : undefined },
     {
       id: "summary",
       label: "AI Summary",
@@ -474,7 +651,7 @@ export default function ResearchPage() {
           <div className="space-y-2">
             <h1 className="text-4xl md:text-5xl font-medium tracking-tight">Startup Research</h1>
             <p className="text-muted-foreground text-lg max-w-md mx-auto">
-              Enter a company name to pull financials, product intel, founder data, and more.
+              Enter a company name or URL to pull product intel, team members, news, and more.
             </p>
           </div>
           <form onSubmit={handleSearch} className="flex gap-3">
@@ -483,7 +660,7 @@ export default function ResearchPage() {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Enter a startup name..."
+                placeholder="Company name or URL (e.g. Wealthup or wealthup.me)"
                 className="h-14 pl-12 text-base rounded-xl border-border/60 bg-card/60 backdrop-blur-sm"
               />
             </div>
@@ -618,6 +795,8 @@ export default function ResearchPage() {
               </div>
 
               {/* Tab panels */}
+              {activeTab === "team" && <TeamPanel data={data} />}
+
               {activeTab === "raw" && (
                 <Card className="border-border/60 overflow-hidden">
                   <CardContent className="p-0">
