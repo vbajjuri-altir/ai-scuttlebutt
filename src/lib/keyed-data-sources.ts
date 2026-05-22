@@ -95,6 +95,12 @@ function asArray(value: unknown): JsonObject[] {
   return Array.isArray(value) ? value.filter((item): item is JsonObject => Boolean(item)) : []
 }
 
+function compactObject<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null),
+  ) as T
+}
+
 export type ConfiguredApiSource = {
   source: string
   configured: boolean

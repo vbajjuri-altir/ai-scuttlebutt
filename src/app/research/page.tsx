@@ -27,6 +27,10 @@ import {
   Lightbulb,
   Newspaper,
   CheckCircle2,
+  MapPin,
+  Code2,
+  Globe,
+  Clock,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -86,6 +90,23 @@ function PipelineLoading({ label }: { label: string }) {
 // Summary panel
 // ---------------------------------------------------------------------------
 
+function PersonChips({ items }: { items: { name: string; title?: string | null; department?: string | null }[] }) {
+  if (!items.length) return <p className="text-sm text-muted-foreground italic">—</p>
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item, i) => (
+        <span
+          key={`${item.name}-${i}`}
+          className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/80 hover:border-primary/30 hover:bg-primary/5 transition-colors"
+          title={[item.title, item.department].filter(Boolean).join(" · ") || undefined}
+        >
+          {item.name}{item.title ? <span className="text-muted-foreground ml-1">· {item.title}</span> : null}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function SummaryPanel({ result }: { result: SummaryPipelineResult }) {
   const s = result.structuredSummary
   return (
@@ -103,6 +124,79 @@ function SummaryPanel({ result }: { result: SummaryPipelineResult }) {
         </CardContent>
       </Card>
 
+      {/* Company meta row */}
+      {(s.headquarters || s.fullAddress || s.officeBuilding || s.founded || s.companySize || s.website || s.operatingHours || s.fundingInfo || s.ratings) && (
+        <Card className="border-border/60">
+          <CardContent className="p-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {s.website && (
+              <div className="flex items-start gap-2 text-sm">
+                <Globe className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Website</p>
+                  <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{s.website}</a>
+                </div>
+              </div>
+            )}
+            {(s.fullAddress || s.headquarters || s.officeBuilding) && (
+              <div className="flex items-start gap-2 text-sm">
+                <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Location</p>
+                  {s.officeBuilding && <p className="font-medium">{s.officeBuilding}</p>}
+                  {s.fullAddress && <p className="text-foreground/80">{s.fullAddress}</p>}
+                  {!s.fullAddress && s.headquarters && <p className="text-foreground/80">{s.headquarters}</p>}
+                </div>
+              </div>
+            )}
+            {s.operatingHours && (
+              <div className="flex items-start gap-2 text-sm">
+                <Clock className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Hours</p>
+                  <p className="text-foreground/80">{s.operatingHours}</p>
+                </div>
+              </div>
+            )}
+            {s.founded && (
+              <div className="flex items-start gap-2 text-sm">
+                <Building2 className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Founded</p>
+                  <p>{s.founded}</p>
+                </div>
+              </div>
+            )}
+            {s.companySize && (
+              <div className="flex items-start gap-2 text-sm">
+                <Users className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Size</p>
+                  <p>{s.companySize}</p>
+                </div>
+              </div>
+            )}
+            {s.fundingInfo && (
+              <div className="flex items-start gap-2 text-sm">
+                <TrendingUp className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Funding</p>
+                  <p className="text-foreground/80">{s.fundingInfo}</p>
+                </div>
+              </div>
+            )}
+            {s.ratings && (
+              <div className="flex items-start gap-2 text-sm">
+                <Shield className="size-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Ratings</p>
+                  <p className="text-foreground/80">{s.ratings}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Structured facts grid */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <Section title="Products" icon={Building2}>
@@ -112,8 +206,13 @@ function SummaryPanel({ result }: { result: SummaryPipelineResult }) {
           <Chips items={s.founders} />
         </Section>
         <Section title="Leadership" icon={Users}>
-          <Chips items={s.leadership} />
+          <PersonChips items={s.leadership} />
         </Section>
+        {s.teamMembers && s.teamMembers.length > 0 && (
+          <Section title="Team Members" icon={Users}>
+            <PersonChips items={s.teamMembers} />
+          </Section>
+        )}
         <Section title="Investors" icon={TrendingUp}>
           <Chips items={s.investors} />
         </Section>
@@ -123,6 +222,11 @@ function SummaryPanel({ result }: { result: SummaryPipelineResult }) {
         <Section title="Industries" icon={Shield}>
           <Chips items={s.industries} />
         </Section>
+        {s.technologies && s.technologies.length > 0 && (
+          <Section title="Technologies" icon={Code2}>
+            <Chips items={s.technologies} />
+          </Section>
+        )}
         <Section title="Partnerships" icon={CheckCircle2}>
           <Chips items={s.partnerships} />
         </Section>
@@ -130,6 +234,25 @@ function SummaryPanel({ result }: { result: SummaryPipelineResult }) {
           <Chips items={s.risksOrUnknowns} />
         </Section>
       </div>
+
+      {/* Social profiles */}
+      {s.socialProfiles && s.socialProfiles.length > 0 && (
+        <Section title="Social Profiles" icon={Globe}>
+          <div className="flex flex-wrap gap-2">
+            {s.socialProfiles.map((p) => (
+              <a
+                key={p.url}
+                href={p.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-medium text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors"
+              >
+                {p.platform}
+              </a>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* Key insights */}
       {s.keyInsights.length > 0 && (

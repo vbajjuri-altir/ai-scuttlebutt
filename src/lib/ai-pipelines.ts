@@ -36,26 +36,59 @@ export function prepareForLLM(sweepResult: CompanyResearchSweepResult): string {
   }
 
   const full = JSON.stringify(cleaned, null, 2)
-  // Hard-cap to avoid accidental token blowout
-  return full.length > 60_000 ? full.slice(0, 60_000) + "\n…[truncated]" : full
+  // Hard-cap to avoid accidental token blowout (GPT-4o supports ~128k tokens)
+  return full.length > 100_000
+    ? full.slice(0, 100_000) + "\n…[truncated]"
+    : full
 }
 
 // ---------------------------------------------------------------------------
 // Summary pipeline types
 // ---------------------------------------------------------------------------
 
+// OpenAI structured outputs require ALL properties to be in `required`.
+// Use .nullable() (not .optional()) for fields that may be absent in the data —
+// the field will always be present in the response but its value will be null.
 const structuredSummarySchema = z.object({
   company: z.string(),
   oneLineDescription: z.string(),
   businessModel: z.string(),
+  website: z.string().nullable(),
+  founded: z.string().nullable(),
+  companySize: z.string().nullable(),
+  headquarters: z.string().nullable(),
+  fullAddress: z.string().nullable(),
+  officeBuilding: z.string().nullable(),
+  operatingHours: z.string().nullable(),
   products: z.array(z.string()),
   founders: z.array(z.string()),
-  leadership: z.array(z.string()),
+  leadership: z.array(
+    z.object({
+      name: z.string(),
+      title: z.string().nullable(),
+    }),
+  ),
+  teamMembers: z.array(
+    z.object({
+      name: z.string(),
+      title: z.string().nullable(),
+      department: z.string().nullable(),
+    }),
+  ),
   investors: z.array(z.string()),
   customers: z.array(z.string()),
   industries: z.array(z.string()),
+  technologies: z.array(z.string()),
   partnerships: z.array(z.string()),
+  socialProfiles: z.array(
+    z.object({
+      platform: z.string(),
+      url: z.string(),
+    }),
+  ),
   recentNews: z.array(z.string()),
+  fundingInfo: z.string().nullable(),
+  ratings: z.string().nullable(),
   keyInsights: z.array(z.string()),
   risksOrUnknowns: z.array(z.string()),
   evidence: z.array(
@@ -77,32 +110,42 @@ export type SummaryPipelineResult = {
 // Summary pipeline
 // ---------------------------------------------------------------------------
 
-const SUMMARY_STEP1_SYSTEM = `You are an expert company research analyst.
-You receive raw JSON data collected from multiple APIs.
-The schemas are inconsistent and may contain duplicate, conflicting, incomplete, or irrelevant information.
+const SUMMARY_STEP1_SYSTEM = `You are an expert company research analyst with a mandate of ZERO DATA LOSS.
+You receive raw JSON data collected from multiple APIs about a specific company.
+The schemas are inconsistent and may contain duplicate, conflicting, or noisy information.
 
-Your task:
-1. Identify the company being researched.
-2. Extract the most important facts.
-3. Remove duplicates.
-4. Ignore metadata, API response information, request logs, and configuration data.
-5. If information conflicts, mention the conflict.
-6. Only use information present in the supplied data.
+CRITICAL RULES — follow every one:
+1. Extract EVERY piece of factual information present in the data, no matter how small.
+2. NEVER skip or summarise away specific details — capture them verbatim or precisely.
+3. Locations: extract the full street address, city, state, postal code, country, AND any named building (e.g. "Kapil Towers", "Financial District") into the correct fields.
+4. Team members: extract ALL named people with their titles and departments — check serpapi knowledge_graph, hunter domain_search, company_website.team, and any people mentioned in snippets or descriptions.
+5. Technologies: extract ALL technologies mentioned anywhere in the data.
+6. Social profiles: extract ALL social media / LinkedIn / Instagram / Twitter profile URLs.
+7. Founders: extract any names mentioned as founder, co-founder, CEO, or similar.
+8. Operating hours: if hours are present in the data, capture them exactly.
+9. Funding / investors: capture all investor names and any funding amounts or rounds mentioned.
+10. If information conflicts across sources, include both versions with a note.
+11. Only use information present in the supplied data — do not hallucinate.
 
 Return the structured JSON requested — nothing else.`
 
-const SUMMARY_STEP2_SYSTEM = `You are a senior analyst writing a company intelligence brief.
+const SUMMARY_STEP2_SYSTEM = `You are a senior analyst writing a comprehensive company intelligence brief.
 Convert the structured summary into a clear, professional report with these sections:
 1. Executive Summary
-2. Company Overview
-3. Products & Services
-4. Founders & Leadership
-5. Investors
-6. Partnerships
-7. Recent Activity
-8. Key Insights & Risks
+2. Company Overview (description, business model, industry, website, founded, size)
+3. Location & Contact (full address, building, city, operating hours)
+4. Products & Services
+5. Founders & Leadership (all named executives with titles)
+6. Team Members (all named individuals)
+7. Technologies & Stack
+8. Investors & Funding
+9. Partnerships & Customers
+10. Social Profiles
+11. Recent News & Activity
+12. Key Insights & Risks
 
-Use only facts present in the summary. Write in plain prose — no bullet lists for the executive summary, bullets are fine for the other sections.`
+IMPORTANT: Include ALL details from the structured summary. Do not omit or summarise away specifics — a fact mentioned once in the data must appear in the report.
+Use only facts present in the summary. Write in plain prose for the executive summary; use bullets for all other sections.`
 
 export async function runSummaryPipeline(
   sweepResult: CompanyResearchSweepResult,
@@ -191,21 +234,29 @@ export type KnowledgeGraphPipelineResult = {
 // Knowledge graph pipeline
 // ---------------------------------------------------------------------------
 
-const GRAPH_STEP1_SYSTEM = `You are a knowledge graph extraction engine.
-Extract factual relationships from the provided company research data.
+const GRAPH_STEP1_SYSTEM = `You are a knowledge graph extraction engine with a mandate of ZERO DATA LOSS.
+Extract ALL factual relationships from the provided company research data.
 
 Rules:
-- Use canonical entity names.
+- Extract EVERY named relationship: company↔person, company↔location, company↔technology, person↔role, company↔investor, company↔customer, company↔product, company↔socialProfile, etc.
+- Use canonical entity names (full name where available).
 - Do not infer facts — only extract explicit relationships present in the data.
 - Include a short evidence quote for each fact.
-- Confidence 1.0 = explicitly stated; 0.7 = strongly implied; 0.5 = uncertain.`
+- Locations (buildings, addresses, cities) MUST be extracted as LOCATION entities.
+- All named people (founders, leadership, team members) MUST be extracted as PERSON entities with their roles.
+- All technologies mentioned MUST be extracted as TECHNOLOGY entities.
+- Confidence 1.0 = explicitly stated; 0.7 = strongly implied; 0.5 = uncertain.
+- Err on the side of extracting more rather than fewer facts.`
 
 const GRAPH_STEP2_SYSTEM = `You are an entity resolution engine.
 Given a list of facts, identify all unique entities and merge aliases into a single canonical name.
 Assign each entity one of the types: COMPANY, PERSON, PRODUCT, INVESTOR, CUSTOMER, TECHNOLOGY, INDUSTRY, LOCATION, EVENT.`
 
 function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")
 }
 
 function buildGraph(
@@ -222,8 +273,7 @@ function buildGraph(
     }
   }
 
-  const resolve = (name: string) =>
-    aliasMap.get(name.toLowerCase()) ?? name
+  const resolve = (name: string) => aliasMap.get(name.toLowerCase()) ?? name
 
   // Collect unique canonical names seen in facts
   const seenLabels = new Set<string>()
