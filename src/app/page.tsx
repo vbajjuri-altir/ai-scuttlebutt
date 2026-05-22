@@ -21,7 +21,9 @@ export default function Home() {
           </nav>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm">Sign In</Button>
-            <Button size="sm">Get Started</Button>
+            <a href="/research">
+              <Button size="sm">Get Started</Button>
+            </a>
           </div>
         </div>
       </header>
@@ -45,14 +47,12 @@ export default function Home() {
             MOAT analysis, and founder deep-dive. In minutes, not days.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Input
-              placeholder="Enter a startup name..."
-              className="h-12 text-base max-w-sm w-full"
-            />
-            <Button size="lg" className="h-12 px-8 rounded-full">
-              Research
-            </Button>
+          <div className="pt-4">
+            <a href="/research">
+              <Button size="lg" className="h-12 px-8 rounded-full">
+                Get Started
+              </Button>
+            </a>
           </div>
 
           <div className="flex items-center justify-center gap-8 pt-4">
