@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { SummaryPipelineResult, KnowledgeGraphPipelineResult } from "@/lib/ai-pipelines"
 import type { CompanyResearchSweepResult } from "@/lib/research-tools"
+import { GraphVisualization } from "@/components/graph-visualization"
 
 // ---------------------------------------------------------------------------
 // Small display helpers
@@ -275,6 +276,11 @@ function GraphPanel({ result }: { result: KnowledgeGraphPipelineResult }) {
             </div>
           ))}
         </div>
+      </Section>
+
+      {/* Interactive graph */}
+      <Section title="Graph">
+        <GraphVisualization nodes={graph.nodes} edges={graph.edges} />
       </Section>
     </div>
   )
