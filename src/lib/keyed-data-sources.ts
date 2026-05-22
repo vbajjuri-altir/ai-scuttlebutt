@@ -137,6 +137,10 @@ export type NewsArticle = {
   author?: string
   publishedAt?: string
   content?: string
+  imageUrl?: string
+  sentiment?: number | string
+  keywords?: string[]
+  categories?: string[]
 }
 
 export type NewsApiSearchResult = {
@@ -251,6 +255,19 @@ export async function searchWorldNews(
       author: typeof article.author === "string" ? article.author : undefined,
       publishedAt:
         typeof article.publish_date === "string" ? article.publish_date : undefined,
+      imageUrl: typeof article.image === "string" ? article.image : undefined,
+      sentiment:
+        typeof article.sentiment === "number"
+          ? article.sentiment
+          : typeof article.sentiment === "string"
+            ? article.sentiment
+            : undefined,
+      categories:
+        typeof article.category === "string"
+          ? [article.category]
+          : Array.isArray(article.category)
+            ? (article.category as unknown[]).filter((c): c is string => typeof c === "string")
+            : undefined,
     })),
   }
 }
@@ -312,6 +329,15 @@ export async function searchNewsData(
         : undefined,
       publishedAt: typeof article.pubDate === "string" ? article.pubDate : undefined,
       content: typeof article.content === "string" ? article.content : undefined,
+      imageUrl: typeof article.image_url === "string" ? article.image_url : undefined,
+      sentiment:
+        typeof article.sentiment === "string" ? article.sentiment : undefined,
+      keywords: Array.isArray(article.keywords)
+        ? (article.keywords as unknown[]).filter((k): k is string => typeof k === "string")
+        : undefined,
+      categories: Array.isArray(article.category)
+        ? (article.category as unknown[]).filter((c): c is string => typeof c === "string")
+        : undefined,
     })),
   }
 }
@@ -335,6 +361,26 @@ export type HunterEmail = {
   linkedin?: string
 }
 
+export type HunterCompanyProfile = {
+  description?: string
+  industry?: string
+  companyType?: string
+  headcount?: string
+  country?: string
+  state?: string
+  city?: string
+  street?: string
+  postalCode?: string
+  twitter?: string
+  linkedin?: string
+  facebook?: string
+  instagram?: string
+  youtube?: string
+  technologies?: string[]
+  webmail?: boolean
+  acceptAll?: boolean
+}
+
 export type HunterDomainSearchResult = {
   source: "hunter_domain_search"
   query: HunterDomainSearchOptions
@@ -342,6 +388,7 @@ export type HunterDomainSearchResult = {
   domain?: string
   organization?: string
   pattern?: string
+  companyProfile: HunterCompanyProfile
   emails: HunterEmail[]
 }
 
@@ -352,7 +399,7 @@ export async function searchHunterDomain(
   const apiKey = fetchOptions.apiKey ?? getEnvValue(["HUNTER_API_KEY"], "Hunter.io")
   const url = new URL("https://api.hunter.io/v2/domain-search")
   url.searchParams.set("domain", options.domain)
-  url.searchParams.set("limit", String(options.limit ?? 10))
+  url.searchParams.set("limit", String(options.limit ?? 5))
 
   if (options.department) {
     url.searchParams.set("department", options.department)
@@ -376,7 +423,28 @@ export async function searchHunterDomain(
     organization:
       typeof data.organization === "string" ? data.organization : undefined,
     pattern: typeof data.pattern === "string" ? data.pattern : undefined,
-    emails: asArray(data.emails).map((email) => ({
+    companyProfile: {
+      description: typeof data.description === "string" ? data.description : undefined,
+      industry: typeof data.industry === "string" ? data.industry : undefined,
+      companyType: typeof data.company_type === "string" ? data.company_type : undefined,
+      headcount: typeof data.headcount === "string" ? data.headcount : undefined,
+      country: typeof data.country === "string" ? data.country : undefined,
+      state: typeof data.state === "string" ? data.state : undefined,
+      city: typeof data.city === "string" ? data.city : undefined,
+      street: typeof data.street === "string" ? data.street : undefined,
+      postalCode: typeof data.postal_code === "string" ? data.postal_code : undefined,
+      twitter: typeof data.twitter === "string" ? data.twitter : undefined,
+      linkedin: typeof data.linkedin === "string" ? data.linkedin : undefined,
+      facebook: typeof data.facebook === "string" ? data.facebook : undefined,
+      instagram: typeof data.instagram === "string" ? data.instagram : undefined,
+      youtube: typeof data.youtube === "string" ? data.youtube : undefined,
+      technologies: Array.isArray(data.technologies)
+        ? (data.technologies as unknown[]).filter((t): t is string => typeof t === "string")
+        : undefined,
+      webmail: typeof data.webmail === "boolean" ? data.webmail : undefined,
+      acceptAll: typeof data.accept_all === "boolean" ? data.accept_all : undefined,
+    },
+    emails: asArray(data.emails).slice(0, options.limit ?? 5).map((email) => ({
       value: typeof email.value === "string" ? email.value : undefined,
       type: typeof email.type === "string" ? email.type : undefined,
       confidence: typeof email.confidence === "number" ? email.confidence : undefined,
@@ -410,12 +478,22 @@ export type SerpApiOrganicResult = {
   date?: string
 }
 
+export type SerpApiRelatedQuestion = {
+  question?: string
+  snippet?: string
+  title?: string
+  link?: string
+}
+
 export type SerpApiSearchResult = {
   source: "serpapi"
   query: SerpApiSearchOptions
   requestUrl: string
   engine: string
   results: SerpApiOrganicResult[]
+  knowledgeGraph?: JsonObject
+  answerBox?: JsonObject
+  relatedQuestions?: SerpApiRelatedQuestion[]
   raw: JsonObject
 }
 
@@ -462,6 +540,25 @@ export async function searchSerpApi(
         ? asArray(payload.news_results)
         : asArray(payload.organic_results)
 
+  const knowledgeGraph =
+    payload.knowledge_graph && typeof payload.knowledge_graph === "object"
+      ? (payload.knowledge_graph as JsonObject)
+      : undefined
+
+  const answerBox =
+    payload.answer_box && typeof payload.answer_box === "object"
+      ? (payload.answer_box as JsonObject)
+      : undefined
+
+  const relatedQuestions = Array.isArray(payload.related_questions)
+    ? (payload.related_questions as JsonObject[]).map((q) => ({
+        question: typeof q.question === "string" ? q.question : undefined,
+        snippet: typeof q.snippet === "string" ? q.snippet : undefined,
+        title: typeof q.title === "string" ? q.title : undefined,
+        link: typeof q.link === "string" ? q.link : undefined,
+      }))
+    : undefined
+
   return {
     source: "serpapi",
     query: options,
@@ -475,6 +572,9 @@ export async function searchSerpApi(
       source: typeof result.source === "string" ? result.source : undefined,
       date: typeof result.date === "string" ? result.date : undefined,
     })),
+    knowledgeGraph,
+    answerBox,
+    relatedQuestions,
     raw: payload,
   }
 }
@@ -496,8 +596,14 @@ export type GitHubSearchResultItem = {
   htmlUrl?: string
   stars?: number
   forks?: number
+  watchers?: number
   language?: string
   type?: string
+  topics?: string[]
+  openIssues?: number
+  updatedAt?: string
+  pushedAt?: string
+  license?: string
 }
 
 export type GitHubSearchResult = {
@@ -551,8 +657,19 @@ export async function searchGitHub(
       htmlUrl: typeof item.html_url === "string" ? item.html_url : undefined,
       stars: typeof item.stargazers_count === "number" ? item.stargazers_count : undefined,
       forks: typeof item.forks_count === "number" ? item.forks_count : undefined,
+      watchers: typeof item.watchers_count === "number" ? item.watchers_count : undefined,
       language: typeof item.language === "string" ? item.language : undefined,
       type: typeof item.type === "string" ? item.type : undefined,
+      topics: Array.isArray(item.topics)
+        ? (item.topics as unknown[]).filter((t): t is string => typeof t === "string")
+        : undefined,
+      openIssues: typeof item.open_issues_count === "number" ? item.open_issues_count : undefined,
+      updatedAt: typeof item.updated_at === "string" ? item.updated_at : undefined,
+      pushedAt: typeof item.pushed_at === "string" ? item.pushed_at : undefined,
+      license:
+        item.license && typeof (item.license as JsonObject)?.spdx_id === "string"
+          ? ((item.license as JsonObject).spdx_id as string)
+          : undefined,
     })),
   }
 }
@@ -596,7 +713,18 @@ export async function getGitHubOrgProfile(
       htmlUrl: typeof repo.html_url === "string" ? repo.html_url : undefined,
       stars: typeof repo.stargazers_count === "number" ? repo.stargazers_count : undefined,
       forks: typeof repo.forks_count === "number" ? repo.forks_count : undefined,
+      watchers: typeof repo.watchers_count === "number" ? repo.watchers_count : undefined,
       language: typeof repo.language === "string" ? repo.language : undefined,
+      topics: Array.isArray(repo.topics)
+        ? (repo.topics as unknown[]).filter((t): t is string => typeof t === "string")
+        : undefined,
+      openIssues: typeof repo.open_issues_count === "number" ? repo.open_issues_count : undefined,
+      updatedAt: typeof repo.updated_at === "string" ? repo.updated_at : undefined,
+      pushedAt: typeof repo.pushed_at === "string" ? repo.pushed_at : undefined,
+      license:
+        repo.license && typeof (repo.license as JsonObject)?.spdx_id === "string"
+          ? ((repo.license as JsonObject).spdx_id as string)
+          : undefined,
     }))
   }
 
@@ -675,6 +803,11 @@ export type ProductHuntPostsOptions = {
   first?: number
 }
 
+export type ProductHuntSearchOptions = {
+  query: string
+  first?: number
+}
+
 export function buildProductHuntPostsQuery(): string {
   return `
     query ProductHuntPosts($first: Int!) {
@@ -695,6 +828,47 @@ export function buildProductHuntPostsQuery(): string {
   `
 }
 
+export function buildProductHuntSearchQuery(): string {
+  return `
+    query SearchProductHuntPosts($query: String!, $first: Int!) {
+      posts(first: $first, order: VOTES, search: $query) {
+        edges {
+          node {
+            id
+            name
+            tagline
+            description
+            url
+            website
+            votesCount
+            commentsCount
+            reviewsRating
+            reviewsCount
+            createdAt
+            thumbnail {
+              url
+            }
+            makers {
+              name
+              username
+              twitterUsername
+              websiteUrl
+              profileUrl
+            }
+            topics {
+              edges {
+                node {
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `
+}
+
 export async function getProductHuntPosts(
   options: ProductHuntPostsOptions = {},
   fetchOptions: FetchJsonOptions & { accessToken?: string } = {},
@@ -702,6 +876,17 @@ export async function getProductHuntPosts(
   return productHuntGraphql(
     buildProductHuntPostsQuery(),
     { first: options.first ?? 10 },
+    fetchOptions,
+  )
+}
+
+export async function searchProductHuntPosts(
+  options: ProductHuntSearchOptions,
+  fetchOptions: FetchJsonOptions & { accessToken?: string } = {},
+): Promise<ProductHuntGraphqlResult> {
+  return productHuntGraphql(
+    buildProductHuntSearchQuery(),
+    { query: options.query, first: options.first ?? 5 },
     fetchOptions,
   )
 }

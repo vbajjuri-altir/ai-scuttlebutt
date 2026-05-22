@@ -8,11 +8,11 @@ import {
 import {
   getConfiguredApiSources,
   getGitHubOrgProfile,
-  getProductHuntPosts,
   searchGitHub,
   searchHunterDomain,
   searchNewsApi,
   searchNewsData,
+  searchProductHuntPosts,
   searchSerpApi,
   searchWorldNews,
 } from "./keyed-data-sources"
@@ -80,11 +80,23 @@ export async function runCompanyResearchSweep(
     captureToolResult("newsdata.search", () =>
       searchNewsData({ query, size: 5 }),
     ),
+    // Brand search: just the company name to trigger knowledge_graph, answer_box, related_questions
+    captureToolResult("serpapi.brand_search", () =>
+      searchSerpApi({ query: options.companyName, num: 5 }),
+    ),
+    // Funding/founders search
     captureToolResult("serpapi.company_search", () =>
       searchSerpApi({ query: `${query} startup funding founders`, num: 5 }),
     ),
     captureToolResult("serpapi.news_search", () =>
       searchSerpApi({ query, engine: "google_news", num: 5 }),
+    ),
+    // LinkedIn company & people search via Google
+    captureToolResult("serpapi.linkedin_search", () =>
+      searchSerpApi({
+        query: `site:linkedin.com/company ${options.companyName} OR site:linkedin.com/in ${options.companyName} founder`,
+        num: 5,
+      }),
     ),
     captureToolResult("github.search", () =>
       searchGitHub({ query: `${options.companyName} in:name`, perPage: 5 }),
@@ -114,8 +126,9 @@ export async function runCompanyResearchSweep(
           collapse: "digest",
         }),
       ),
+      // Limit to 5 emails to preserve credits
       captureToolResult("hunter.domain_search", () =>
-        searchHunterDomain({ domain, limit: 10 }),
+        searchHunterDomain({ domain, limit: 5 }),
       ),
     )
   }
@@ -140,9 +153,10 @@ export async function runCompanyResearchSweep(
   }
 
   if (options.includeProductHunt) {
+    // Search by company name instead of fetching unrelated latest posts
     results.push(
-      captureToolResult("product_hunt.posts", () =>
-        getProductHuntPosts({ first: 5 }),
+      captureToolResult("product_hunt.company_search", () =>
+        searchProductHuntPosts({ query: options.companyName, first: 5 }),
       ),
     )
   }
